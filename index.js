@@ -190,5 +190,5 @@ async function printJobs() {
     console.log('Total Indeed Jobs: ' + totalIndeedJobs);
 }
 if (1) {
-    printJobs
+    printJobs()
 }
