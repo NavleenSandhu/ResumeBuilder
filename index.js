@@ -1,7 +1,5 @@
 const fs = require('fs')
 const cheerio = require('cheerio')
-const fetch = require('node-fetch')
-const crypto = require('crypto')
 const { appliedJobs, generateAIResponse, writeToFile, writeJobId } = require('./utils.js')
 const { makeIndeedFiles } = require('./indeed.js');
 let totalLinkedInJobs = 0
@@ -21,7 +19,7 @@ async function getJob(jobId, job, position) {
             "sec-fetch-site": "same-origin",
             "Referer": `https://www.linkedin.com/jobs/search?keywords=${job}&location=Canada%2C%2BON&geoId=101174742&f_JT=F%2CC%2CT&f_E=1%2C2&currentJobId=${jobId}&position=${position}&pageNum=0`,
             "Referrer-Policy": "strict-origin-when-cross-origin",
-            "User-Agent": "Mozilla/ 5.0(Windows NT 10.0; Win64; x64) AppleWebKit / 537.36(KHTML, like Gecko) Chrome / 122.0.0.0 Safari / 537.36 Edg / 122.0.0.0"
+            "User-Agent": "Mozilla/ 5.0(Windows NT 10.0; Win64; x64) AppleWebKit / 537.36(HTML, like Gecko) Chrome / 122.0.0.0 Safari / 537.36 Edg / 122.0.0.0"
         },
         "body": null,
         "method": "GET"
@@ -96,7 +94,7 @@ Job Description: `;
     for (let i = 0; i < jobs.length; i++) {
         const currentJob = await getJob(jobs[i].id, jobField, pos++)
         const jobDescription = currentJob?.replace(/<[^>]*>/g, '')
-        if (jobDescription !== undefined && jobDescription !== null) {
+        if (jobDescription) {
             const resume = await generateAIResponse(`${resumePrompt}\n${jobDescription}\n\n`);
             // Resume: ${resumeFile}`);
             const experience = await generateAIResponse(`${experiencePrompt}\n${jobDescription}\n`);

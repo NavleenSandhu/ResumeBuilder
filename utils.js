@@ -4,7 +4,7 @@ const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", 
 const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 const openai = new OpenAI({
-    apiKey: 'your-api-key'
+    apiKey: process.env.OPEN_AI_API_KEY
 });
 
 let appliedJobs = fs.readFileSync('files/appliedJobIDs.txt').toString().split('\n')
@@ -43,4 +43,5 @@ function writeJobId(jobId) {
         }
     })
 }
+
 module.exports = { appliedJobs, generateAIResponse, writeToFile, writeJobId }

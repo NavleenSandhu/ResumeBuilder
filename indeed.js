@@ -93,7 +93,7 @@ Job Description: `;
     for (let i = 0; i < jobs.length; i++) {
         try {
             const jobDescription = await getIndeedJob(jobs[i].id)
-            if (jobDescription !== undefined && jobDescription !== null) {
+            if (jobDescription) {
                 const resume = await generateAIResponse(`${resumePrompt}\n${jobDescription}\n\n`);
                 // Resume: ${resumeFile}`);
                 const experience = await generateAIResponse(`${experiencePrompt}\n${jobDescription}\n`);
