@@ -1,6 +1,7 @@
 const cheerio = require('cheerio')
 const { appliedJobs, generateAIResponse, writeToFile, writeJobId } = require('./utils.js')
-let totalIndeedJobs = 0
+const fs = require('fs');
+const { format } = require('date-fns')
 async function getIndeedJobs(jobField, num) {
     let start = num * 10
     const response = await fetch(`https://ca.indeed.com/jobs?q=${encodeURIComponent(jobField)}&l=Canada&start=${start}&fromage=3`, {
@@ -64,7 +65,27 @@ async function getIndeedJob(jobId) {
 
 }
 
-async function makeIndeedFiles(jobField, num) {
+async function getIndeedJobById(jobId, title, resumeFile) {
+    const job = await getIndeedJob(jobId)
+    const jobDescription = job?.replace(/<[^>]*>/g, '')
+    const resumePrompt = `Modify the given resume by updating the summary and skills sections.  
+- Incorporate relevant technologies from the job description into both sections.  
+- Use power verbs from the job description in both sections.  
+- Keep the structure and formatting the same as the original resume.  
+- Do not add any introductions or concluding remarks—only return the updated resume text.  
+- No heading
+
+Resume:  
+${resumeFile}  
+
+Job Description:  
+${jobDescription}`;
+    const resume = await generateAIResponse(resumePrompt);
+    await writeToFile(resume, title)
+    writeJobId(jobId)
+}
+
+async function makeIndeedFiles(jobField, num, resumeFile) {
     let jobs = await getIndeedJobs(jobField, num)
     if (appliedJobs.length > 0) {
         for (let job of jobs) {
@@ -73,34 +94,29 @@ async function makeIndeedFiles(jobField, num) {
             }
         }
     }
-    totalIndeedJobs += jobs.length
-    // const resumePrompt = `Can you alter the given resume and change the summary and skills section and add technologies in both sections, required in the following job description. Also add power verbs from the description in the sections:
-    // Job Description: `;
-    const resumePrompt = `Can you write me a resume containing a tag line, summary(4-5 bullets) and skills(explaining proficiency in technologies from the job description in bullets) with power verbs and keywords from the following job description: `;
-    const experiencePrompt = `Use the following format and give me two experiences for the job with description below. Only change the titles, duties and impacts in numbers of the experiences from the job description. I want the same company name as Epsilon Solutions Ltd. and the time should also be the same as JANUARY 2023 -APRIL 2023 and SEPTEMBER 2023 -DECEMBER 2023.
-    Format:
-    Junior Software Developer – Epsilon Solutions Ltd.			JANUARY 2023 -JUNE 2023
-•	Developed a customer management web application using React.js and Node.js, improving data handling efficiency by 40%.
-•	Integrated third-party APIs for payment processing and authentication, streamlining business processes.
-•	Optimized PostgreSQL schemas, enhancing query performance by 30%.
-•	Actively participated in Agile ceremonies, boosting team productivity by 15%.
-•	Identified and resolved bugs, increasing test coverage by 25%.
-
-Job Description: `;
-    const coverLetterPrompt = 'Can you write me a cover letter as per the following job description and add power verbs: ';
-
 
     for (let i = 0; i < jobs.length; i++) {
         try {
             const jobDescription = await getIndeedJob(jobs[i].id)
+            const resumePrompt = `Modify the given resume by updating the summary and skills sections.  
+        - Incorporate relevant technologies from the job description into both sections.  
+        - Use power verbs from the job description in both sections.  
+        - Keep the structure and formatting the same as the original resume.  
+        - Do not add any introductions or concluding remarks—only return the updated resume text.  
+        - No heading
+        
+        Resume:  
+        ${resumeFile}  
+        
+        Job Description:  
+        ${jobDescription}`;
             if (jobDescription) {
-                const resume = await generateAIResponse(`${resumePrompt}\n${jobDescription}\n\n`);
-                // Resume: ${resumeFile}`);
-                const experience = await generateAIResponse(`${experiencePrompt}\n${jobDescription}\n`);
-                const coverLetter = await generateAIResponse(coverLetterPrompt + '' + jobDescription);
-                let content = `Job Link: ${jobs[i].link}\n\nResume:\n${resume}\n\nExperience:\n${experience}\n\nCover Letter:\n${coverLetter}`;
-                content = content.replace(/[*#]/g, '');
-                writeToFile(content, `${jobs[i].company}- ${jobs[i].title}`)
+                const resume = await generateAIResponse(resumePrompt);
+                const fileName = `${jobs[i].company}- ${jobs[i].title}`
+                await writeToFile(resume, fileName)
+                const dateString = format(new Date(), 'yyyy-MM-dd (EEE)')
+                const dirPath = `C:/Projects/JobFinder/files/${dateString}`
+                fs.appendFileSync('jobInfo.csv', `${jobs[i].link}, ${fileName}, ${dirPath}/${fileName.replace(/[^\w\s.,-]/g, ' ')}.pdf\n`)
             }
         } catch (error) {
             console.log('Could not parse json for id: ' + jobs[i].id);
@@ -111,4 +127,4 @@ Job Description: `;
 }
 
 
-module.exports = { makeIndeedFiles, totalIndeedJobs }
+module.exports = { makeIndeedFiles, getIndeedJobById }

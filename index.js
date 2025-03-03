@@ -1,7 +1,8 @@
 const fs = require('fs')
 const cheerio = require('cheerio')
-const { appliedJobs, generateAIResponse, writeToFile, writeJobId } = require('./utils.js')
-const { makeIndeedFiles } = require('./indeed.js');
+const { appliedJobs, generateAIResponse, writeToFile, writeJobId, createPDF } = require('./utils.js')
+const { makeIndeedFiles, getIndeedJobById } = require('./indeed.js');
+const { format } = require('date-fns')
 let totalLinkedInJobs = 0
 
 
@@ -64,7 +65,7 @@ async function getJobs(jobName, page = 1) {
     return json
 }
 
-async function makeFiles(jobField, num) {
+async function makeFiles(jobField, num, resumeFile) {
     let jobs = await getJobs(jobField, num)
     if (appliedJobs.length > 0) {
         for (let job of jobs) {
@@ -75,118 +76,113 @@ async function makeFiles(jobField, num) {
     }
     totalLinkedInJobs += jobs.length
     let pos = 1
-    // const resumePrompt = `Can you alter the given resume and change the summary and skills section and add technologies in both sections, required in the following job description. Also add power verbs from the description in the sections:
-    // Job Description: `;
-    const resumePrompt = `Can you write me a resume containing a tag line, summary(4-5 bullets) and skills(explaining proficiency in technologies from the job description in bullets) with power verbs and keywords from the following job description: `;
-    const experiencePrompt = `Use the following format and give me two experiences for the job with description below. Only change the titles, duties and impacts in numbers of the experiences from the job description. I want the same company name as Epsilon Solutions Ltd. and the time should also be the same as JANUARY 2023 -APRIL 2023 and SEPTEMBER 2023 -DECEMBER 2023.
-    Format:
-    Junior Software Developer – Epsilon Solutions Ltd.			JANUARY 2023 -JUNE 2023
-•	Developed a customer management web application using React.js and Node.js, improving data handling efficiency by 40%.
-•	Integrated third-party APIs for payment processing and authentication, streamlining business processes.
-•	Optimized PostgreSQL schemas, enhancing query performance by 30%.
-•	Actively participated in Agile ceremonies, boosting team productivity by 15%.
-•	Identified and resolved bugs, increasing test coverage by 25%.
-
-Job Description: `;
-    const coverLetterPrompt = 'Can you write me a cover letter as per the following job description and add power verbs: ';
-
-
     for (let i = 0; i < jobs.length; i++) {
         const currentJob = await getJob(jobs[i].id, jobField, pos++)
         const jobDescription = currentJob?.replace(/<[^>]*>/g, '')
         if (jobDescription) {
-            const resume = await generateAIResponse(`${resumePrompt}\n${jobDescription}\n\n`);
-            // Resume: ${resumeFile}`);
-            const experience = await generateAIResponse(`${experiencePrompt}\n${jobDescription}\n`);
-            const coverLetter = await generateAIResponse(coverLetterPrompt + '' + jobDescription);
-            let content = `Job Link: ${jobs[i].link}\n\nResume:\n${resume}\n\nExperience:\n${experience}\n\nCover Letter:\n${coverLetter}`;
-            content = content.replace(/[*#]/g, '');
-            writeToFile(content, `${jobs[i].company}- ${jobs[i].title}`)
+            const resumePrompt = `Modify the given resume by updating the summary and skills sections.  
+        - Incorporate relevant technologies from the job description into both sections.  
+        - Use power verbs from the job description in both sections.  
+        - Keep the structure and formatting the same as the original resume.  
+        - Do not add any introductions or concluding remarks—only return the updated resume text.  
+        - No heading
+        
+        Resume:  
+        ${resumeFile}  
+        
+        Job Description:  
+        ${jobDescription}`;
+            const resume = await generateAIResponse(resumePrompt);
+            const fileName = `${jobs[i].company}- ${jobs[i].title}`
+            await writeToFile(resume, fileName)
+            const dateString = format(new Date(), 'yyyy-MM-dd (EEE)')
+            const dirPath = `C:/Projects/JobFinder/files/${dateString}`
+            fs.appendFileSync('jobInfo.csv', `${jobs[i].link}, ${fileName}, ${dirPath}/${fileName.replace(/[^\w\s.,-]/g, ' ')}.pdf\n`)
             writeJobId(jobs[i].id)
         }
     }
 }
 
-async function getJobById(jobId, jobField, title) {
+async function getJobById(jobId, jobField, title, resumeFile) {
     const job = await getJob(jobId, jobField, 1)
     const jobDescription = job?.replace(/<[^>]*>/g, '')
-    const resumePrompt = `Can you write me a resume containing a tag line, summary(4-5 bullets) and skills(explaining proficiency in technologies from the job description in bullets) with power verbs and keywords from the following job description: `;
-    const experiencePrompt = `Use the following format and give me two experiences for the job with description below. Only change the titles, duties and impacts in numbers of the experiences from the job description. I want the same company name as Epsilon Solutions Ltd. and the time should also be the same as JANUARY 2023 -APRIL 2023 and SEPTEMBER 2023 -DECEMBER 2023.
-    Format:
-    Junior Software Developer – Epsilon Solutions Ltd.			JANUARY 2023 -JUNE 2023
-•	Developed a customer management web application using React.js and Node.js, improving data handling efficiency by 40%.
-•	Integrated third-party APIs for payment processing and authentication, streamlining business processes.
-•	Optimized PostgreSQL schemas, enhancing query performance by 30%.
-•	Actively participated in Agile ceremonies, boosting team productivity by 15%.
-•	Identified and resolved bugs, increasing test coverage by 25%.
+    const resumePrompt = `Modify the given resume by updating the summary and skills sections.  
+- Incorporate relevant technologies from the job description into both sections.  
+- Use power verbs from the job description in both sections.  
+- Keep the structure and formatting the same as the original resume.  
+- Do not add any introductions or concluding remarks—only return the updated resume text.  
+- No heading
 
-Job Description: `;
-    const coverLetterPrompt = 'Can you write me a cover letter as per the following job description and add power verbs: ';
-    const resume = await generateAIResponse(`${resumePrompt}\n${jobDescription}\n\n`);
-    // Resume: ${resumeFile}`);
-    const experience = await generateAIResponse(`${experiencePrompt}\n${jobDescription}\n`);
-    const coverLetter = await generateAIResponse(coverLetterPrompt + '' + jobDescription);
-    const content = `Resume:\n${resume}\n\nExperience:\n${experience}\n\nCover Letter:\n${coverLetter}`;
-    writeToFile(content, title)
+Resume:  
+${resumeFile}  
+
+Job Description:  
+${jobDescription}`;
+    const resume = await generateAIResponse(resumePrompt);
+    await writeToFile(resume, title)
     writeJobId(jobId)
 
 }
 
-async function getJobByDescription(jobDescription, title) {
-    const resumePrompt = `Can you write me a resume containing a tag line, summary(4-5 bullets) and skills(explaining proficiency in technologies from the job description in bullets) with power verbs and keywords from the following job description: `;
-    const experiencePrompt = `Use the following format and give me two experiences for the job with description below. Only change the titles, duties and impacts in numbers of the experiences from the job description. I want the same company name as Epsilon Solutions Ltd. and the time should also be the same as JANUARY 2023 -APRIL 2023 and SEPTEMBER 2023 -DECEMBER 2023.
-    Format:
-    Junior Software Developer – Epsilon Solutions Ltd.			JANUARY 2023 -JUNE 2023
-•	Developed a customer management web application using React.js and Node.js, improving data handling efficiency by 40%.
-•	Integrated third-party APIs for payment processing and authentication, streamlining business processes.
-•	Optimized PostgreSQL schemas, enhancing query performance by 30%.
-•	Actively participated in Agile ceremonies, boosting team productivity by 15%.
-•	Identified and resolved bugs, increasing test coverage by 25%.
+async function getJobByDescription(jobDescription, title, resumeFile) {
+    const resumePrompt = `Modify the given resume by updating the summary and skills sections.  
+- Incorporate relevant technologies from the job description into both sections.  
+- Use power verbs from the job description in both sections.  
+- Keep the structure and formatting the same as the original resume.  
+- Do not add any introductions or concluding remarks—only return the updated resume text.  
+- No heading
 
-Job Description: `;
-    const coverLetterPrompt = 'Can you write me a cover letter as per the following job description and add power verbs: ';
-    const resume = await generateAIResponse(`${resumePrompt}\n${jobDescription}\n\n`);
-    // Resume: ${resumeFile}`);
-    const experience = await generateAIResponse(`${experiencePrompt}\n${jobDescription}\n`);
-    const coverLetter = await generateAIResponse(coverLetterPrompt + '' + jobDescription);
-    let content = `Resume:\n${resume}\n\nExperience:\n${experience}\n\nCover Letter:\n${coverLetter}`;
-    content = content.replace(/[*#]/g, '');
-    writeToFile(content, title)
+Resume:  
+${resumeFile}  
+
+Job Description:  
+${jobDescription}`;
+    const resume = await generateAIResponse(resumePrompt);
+    await writeToFile(resume, title)
 }
 
-// const descriptionFromFile = fs.readFileSync('files/description.txt', 'utf8')
+const resumeFile = fs.readFileSync('Resume/resume.txt', 'utf8')
+const descriptionFromFile = fs.readFileSync('files/description.txt', 'utf8')
 
 // if (1) {
-//     getJobByDescription(descriptionFromFile, `Euna Solutions- Software Developer Co-Op (React-NodeJS)`)
+//     getJobByDescription(descriptionFromFile, `PDF resume`, resumeFile)
 // }
 
 // if (1) {
-//     getJobById(3989719158, 'sunlife', `Sun Life- Sr. Cloud FinOps Analyst`)
+// getJobById(3989719158, 'sunlife', `Sun Life- Sr. Cloud FinOps Analyst`, resumeFile)
 // }
 
-for (let i = 1; i <= 10; i++) {
-    const randomTime = crypto.randomInt(5, 10)
-    setTimeout(() => {
-        const jobField = 'Software Engineer'
-        makeFiles(jobField, i)
-        makeIndeedFiles(jobField, i)
-    }, randomTime * 1000)
-    setTimeout(() => {
-        const jobField = 'Data Engineer'
-        makeFiles(jobField, i)
-        makeIndeedFiles(jobField, i)
-    }, randomTime * 1000)
-    setTimeout(() => {
-        const jobField = 'Cloud'
-        makeFiles(jobField, i)
-        makeIndeedFiles(jobField, i)
-    }, randomTime * 1000)
+
+
+function writeJobs() {
+    for (let i = 1; i <= 10; i++) {
+        const randomTime = crypto.getRandomValues(new Uint32Array(1))[0] % 10
+        setTimeout(() => {
+            const jobField = 'Software Engineer'
+            makeIndeedFiles(jobField, i, resumeFile)
+            makeFiles(jobField, i, resumeFile)
+        }, randomTime * 1000)
+        setTimeout(() => {
+            const jobField = 'Coding tutor'
+            makeIndeedFiles(jobField, i, resumeFile)
+        }, randomTime * 1000)
+        setTimeout(() => {
+            const jobField = 'Data Engineer'
+            makeIndeedFiles(jobField, i, resumeFile)
+            makeFiles(jobField, i, resumeFile)
+        }, randomTime * 1000)
+        setTimeout(() => {
+            const jobField = 'Coding instructor'
+            makeIndeedFiles(jobField, i, resumeFile)
+        }, randomTime * 1000)
+        setTimeout(() => {
+            const jobField = 'Cloud'
+            makeIndeedFiles(jobField, i, resumeFile)
+            makeFiles(jobField, i, resumeFile)
+        }, randomTime * 1000)
+    }
 }
-const { totalIndeedJobs } = require('./indeed.js')
-async function printJobs() {
-    console.log('Total LinkedIn Jobs: ' + totalLinkedInJobs);
-    console.log('Total Indeed Jobs: ' + totalIndeedJobs);
-}
+
 if (1) {
-    printJobs()
+    writeJobs()
 }
